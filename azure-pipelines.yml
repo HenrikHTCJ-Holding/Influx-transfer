@@ -1,0 +1,58 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr: none
+
+# Transfer-only pipeline (InfluxDB -> on-prem SQL Server).
+# Runs on a self-hosted agent that has network access to SQL Server.
+
+pool:
+  name: $(ON_PREM_AGENT_POOL)
+
+variables:
+  - name: pythonVersion
+    value: '3.11'
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: $(pythonVersion)
+    displayName: 'Use Python $(pythonVersion)'
+
+  - script: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+    displayName: 'Install dependencies'
+
+  - script: |
+      python -m src.transfer.main
+    displayName: 'Run transfer'
+    env:
+      # InfluxDB (v2)
+      INFLUX_URL: $(INFLUX_URL)
+      INFLUX_TOKEN: $(INFLUX_TOKEN)
+      INFLUX_ORG: $(INFLUX_ORG)
+      INFLUX_BUCKET: $(INFLUX_BUCKET)
+      INFLUX_MEASUREMENT: $(INFLUX_MEASUREMENT)
+      INFLUX_FIELDS: $(INFLUX_FIELDS)
+      INFLUX_TAG_COLUMNS: $(INFLUX_TAG_COLUMNS)
+      INFLUX_RANGE_START: $(INFLUX_RANGE_START)
+      INFLUX_AGG_EVERY: $(INFLUX_AGG_EVERY)
+      INFLUX_AGG_FN: $(INFLUX_AGG_FN)
+      INFLUX_CREATE_EMPTY: $(INFLUX_CREATE_EMPTY)
+      INFLUX_TIMEOUT_MS: $(INFLUX_TIMEOUT_MS)
+
+      # SQL Server
+      SQLSERVER_DRIVER: $(SQLSERVER_DRIVER)
+      SQLSERVER_HOST: $(SQLSERVER_HOST)
+      SQLSERVER_PORT: $(SQLSERVER_PORT)
+      SQLSERVER_DB: $(SQLSERVER_DB)
+      SQLSERVER_USER: $(SQLSERVER_USER)
+      SQLSERVER_PASSWORD: $(SQLSERVER_PASSWORD)
+      SQLSERVER_SCHEMA: $(SQLSERVER_SCHEMA)
+      SQLSERVER_TABLE: $(SQLSERVER_TABLE)
+      SQLSERVER_ENCRYPT: $(SQLSERVER_ENCRYPT)
+      SQLSERVER_TRUST_CERT: $(SQLSERVER_TRUST_CERT)
+      SQLSERVER_TIMEOUT_SECONDS: $(SQLSERVER_TIMEOUT_SECONDS)

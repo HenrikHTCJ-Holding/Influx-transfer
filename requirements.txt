@@ -1,0 +1,4 @@
+influxdb-client>=1.49.0
+pandas>=2.2.0
+numpy>=2.0.0
+pyodbc>=5.1.0
