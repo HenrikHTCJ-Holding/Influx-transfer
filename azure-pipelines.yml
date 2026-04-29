@@ -16,43 +16,43 @@ variables:
     value: '3.11'
 
 steps:
-  - task: UsePythonVersion@0
+  - task: AzureCLI@2
+    displayName: 'Deploy Azure Function (zip deploy)'
     inputs:
-      versionSpec: $(pythonVersion)
-    displayName: 'Use Python $(pythonVersion)'
+      azureSubscription: 'FuncAPP_InfluxDB'
+      scriptType: 'ps'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        $ErrorActionPreference = 'Stop'
 
-  - script: |
-      python -m pip install --upgrade pip
-      pip install -r requirements.txt
-    displayName: 'Install dependencies'
+        $srcRoot = "$(Build.SourcesDirectory)"
+        $zipPath = "$(Build.ArtifactStagingDirectory)\deploy.zip"
 
-  - script: |
-      python -m src.transfer.main
-    displayName: 'Run transfer'
-    env:
-      # InfluxDB (v2)
-      INFLUX_URL: $(INFLUX_URL)
-      INFLUX_TOKEN: $(INFLUX_TOKEN)
-      INFLUX_ORG: $(INFLUX_ORG)
-      INFLUX_BUCKET: $(INFLUX_BUCKET)
-      INFLUX_MEASUREMENT: $(INFLUX_MEASUREMENT)
-      INFLUX_FIELDS: $(INFLUX_FIELDS)
-      INFLUX_TAG_COLUMNS: $(INFLUX_TAG_COLUMNS)
-      INFLUX_RANGE_START: $(INFLUX_RANGE_START)
-      INFLUX_AGG_EVERY: $(INFLUX_AGG_EVERY)
-      INFLUX_AGG_FN: $(INFLUX_AGG_FN)
-      INFLUX_CREATE_EMPTY: $(INFLUX_CREATE_EMPTY)
-      INFLUX_TIMEOUT_MS: $(INFLUX_TIMEOUT_MS)
+        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
-      # SQL Server
-      SQLSERVER_DRIVER: $(SQLSERVER_DRIVER)
-      SQLSERVER_HOST: $(SQLSERVER_HOST)
-      SQLSERVER_PORT: $(SQLSERVER_PORT)
-      SQLSERVER_DB: $(SQLSERVER_DB)
-      SQLSERVER_USER: $(SQLSERVER_USER)
-      SQLSERVER_PASSWORD: $(SQLSERVER_PASSWORD)
-      SQLSERVER_SCHEMA: $(SQLSERVER_SCHEMA)
-      SQLSERVER_TABLE: $(SQLSERVER_TABLE)
-      SQLSERVER_ENCRYPT: $(SQLSERVER_ENCRYPT)
-      SQLSERVER_TRUST_CERT: $(SQLSERVER_TRUST_CERT)
-      SQLSERVER_TIMEOUT_SECONDS: $(SQLSERVER_TIMEOUT_SECONDS)
+        $paths = @(
+          (Join-Path $srcRoot 'function_app.py'),
+          (Join-Path $srcRoot 'host.json'),
+          (Join-Path $srcRoot 'requirements.txt'),
+          (Join-Path $srcRoot 'src')
+        )
+
+        Compress-Archive -Path $paths -DestinationPath $zipPath -Force
+
+        # Ensure Azure builds Python dependencies from requirements.txt
+        az functionapp config appsettings set `
+          --resource-group 'InfluxDB' `
+          --name 'InfluxDB' `
+          --settings `
+            SCM_DO_BUILD_DURING_DEPLOYMENT=true `
+            FUNCTIONS_WORKER_RUNTIME=python `
+            WEBSITE_TIME_ZONE='Romance Standard Time'
+
+        az functionapp deployment source config-zip `
+          --resource-group 'InfluxDB' `
+          --name 'InfluxDB' `
+          --src $zipPath
+
+        az functionapp restart `
+          --resource-group 'InfluxDB' `
+          --name 'InfluxDB'

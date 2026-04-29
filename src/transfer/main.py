@@ -1,6 +1,7 @@
 import os
 import sys
 from datetime import datetime, timezone
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -195,7 +196,16 @@ WHEN NOT MATCHED THEN
     return len(rows)
 
 
-def main() -> int:
+def _to_json_records(df: pd.DataFrame) -> list[dict[str, Any]]:
+    result = df.copy()
+    if "Time" in result.columns:
+        result["Time"] = pd.to_datetime(result["Time"], utc=True, errors="coerce")
+        result["Time"] = result["Time"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+        result["Time"] = result["Time"].where(result["Time"].notna(), None)
+    return result.to_dict(orient="records")
+
+
+def transfer() -> tuple[int, list[dict[str, Any]]]:
     bucket = _env("INFLUX_BUCKET")
     start = os.getenv("INFLUX_RANGE_START", "-24h")
 
@@ -210,7 +220,9 @@ def main() -> int:
     df = _rename_and_clean(df)
     if df.empty:
         print("No rows returned from Influx for the selected range; nothing to insert.")
-        return 0
+        return 0, []
+
+    records = _to_json_records(df)
 
     table_sql = _qualified_table()
     conn = _sql_conn()
@@ -222,12 +234,18 @@ def main() -> int:
     finally:
         conn.close()
 
-    return 0
+    return affected, records
+
+
+def main() -> int:
+    affected, _ = transfer()
+    return affected
 
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(main())
+        main()
+        raise SystemExit(0)
     except Exception as e:
         print(f"Transfer failed: {e}", file=sys.stderr)
         raise

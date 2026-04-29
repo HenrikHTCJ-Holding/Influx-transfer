@@ -1,0 +1,31 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "WEBSITE_TIME_ZONE": "Romance Standard Time",
+    "INFLUX_URL": "",
+    "INFLUX_TOKEN": "",
+    "INFLUX_ORG": "",
+    "INFLUX_BUCKET": "",
+    "INFLUX_MEASUREMENT": "",
+    "INFLUX_FIELDS": "",
+    "INFLUX_RANGE_START": "-24h",
+    "INFLUX_TAG_COLUMNS": "ARC,Equipment\\\\Type,Machine\\\\Name,Project\\\\No,Section\\\\Type,Tower\\\\No",
+    "INFLUX_AGG_EVERY": "1m",
+    "INFLUX_AGG_FN": "mean",
+    "INFLUX_CREATE_EMPTY": "true",
+    "INFLUX_TIMEOUT_MS": "120000",
+    "SQLSERVER_DRIVER": "ODBC Driver 18 for SQL Server",
+    "SQLSERVER_HOST": "",
+    "SQLSERVER_PORT": "1433",
+    "SQLSERVER_DB": "",
+    "SQLSERVER_USER": "",
+    "SQLSERVER_PASSWORD": "",
+    "SQLSERVER_SCHEMA": "dbo",
+    "SQLSERVER_TABLE": "",
+    "SQLSERVER_ENCRYPT": "yes",
+    "SQLSERVER_TRUST_CERT": "no",
+    "SQLSERVER_TIMEOUT_SECONDS": "120"
+  }
+}

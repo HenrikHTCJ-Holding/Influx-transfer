@@ -1,6 +1,7 @@
-# InfluxDB → SQL Server transfer (Azure Pipelines)
+# InfluxDB → SQL Server transfer (Azure Functions)
 
-This repo contains a Python job that extracts time-series data from **InfluxDB 2.x** and writes it to an **on‑prem SQL Server** table.
+This repo contains a Python job that extracts time-series data from **InfluxDB 2.x** and writes it to an **on-prem SQL Server** table.
+It now runs as an **Azure Function** HTTP trigger via `function_app.py`, suitable for Power Automate.
 
 ## Run locally
 
@@ -39,45 +40,29 @@ Run:
 python -m src.transfer.main
 ```
 
-## Azure Pipelines
+## Run as Azure Function locally
 
-Pipeline file: `[azure-pipelines.yml](azure-pipelines.yml)`
+1. Copy `local.settings.json.example` to `local.settings.json`.
+2. Fill in all required `INFLUX_*` and `SQLSERVER_*` values.
+3. Start the function host:
 
-### Required pipeline variables
+```bash
+func start
+```
 
-Create these as pipeline variables (mark secrets as secret) or via a variable group:
+HTTP endpoint route is `influx-to-sql-transfer` and method is `POST`.
+With `auth_level=FUNCTION`, call it using the function key (Power Automate can send this as query param `code`).
 
-- `ON_PREM_AGENT_POOL` (name of your self-hosted agent pool)
+Successful HTTP response contains:
+- `rowsUpserted`: number of rows merged into SQL
+- `rowCount`: number of rows returned
+- `rows`: array of row objects (JSON-safe, `Time` in UTC ISO format)
 
-**Influx:**
-
-- `INFLUX_URL`
-- `INFLUX_TOKEN` (secret)
-- `INFLUX_ORG`
-- `INFLUX_BUCKET`
-- `INFLUX_MEASUREMENT`
-- `INFLUX_FIELDS`
-
-**SQL Server:**
-
-- `SQLSERVER_HOST`
-- `SQLSERVER_DB`
-- `SQLSERVER_USER`
-- `SQLSERVER_PASSWORD` (secret)
-- `SQLSERVER_TABLE`
-
-Optional:
-
-- `SQLSERVER_DRIVER` (default: `ODBC Driver 18 for SQL Server`)
-- `SQLSERVER_PORT` (default: `1433`)
-- `SQLSERVER_ENCRYPT` (default: `yes`)
-- `SQLSERVER_TRUST_CERT` (default: `no`)
-- `INFLUX_TAG_COLUMNS` (default: welding tags used in the original script)
-- `INFLUX_AGG_EVERY` (default: `1m`)
-- `INFLUX_AGG_FN` (default: `mean`)
-- `INFLUX_CREATE_EMPTY` (default: `true`)
-- `INFLUX_TIMEOUT_MS` (default: `120000`)
-- `SQLSERVER_TIMEOUT_SECONDS` (default: `120`)
+In Power Automate:
+1. Use **HTTP** action to call the endpoint.
+2. Use **Parse JSON** on `body('HTTP')?['rows']`.
+3. Use **Create CSV table** from the parsed array.
+4. Use **SharePoint - Create file** to save the CSV in your target folder.
 
 ### SQL index (recommended)
 
