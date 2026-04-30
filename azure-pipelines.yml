@@ -5,11 +5,11 @@ trigger:
 
 pr: none
 
-# Transfer-only pipeline (InfluxDB -> on-prem SQL Server).
-# Runs on a self-hosted agent that has network access to SQL Server.
+# Deploy-only pipeline (Azure Function App).
+# Uses a Microsoft-hosted agent.
 
 pool:
-  name: $(ON_PREM_AGENT_POOL)
+  vmImage: 'windows-latest'
 
 variables:
   - name: pythonVersion
