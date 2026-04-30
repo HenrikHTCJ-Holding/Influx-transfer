@@ -30,14 +30,13 @@ steps:
 
         if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
-        $paths = @(
-          (Join-Path $srcRoot 'function_app.py'),
-          (Join-Path $srcRoot 'host.json'),
-          (Join-Path $srcRoot 'requirements.txt'),
-          (Join-Path $srcRoot 'src')
-        )
-
-        Compress-Archive -Path $paths -DestinationPath $zipPath -Force
+        # IMPORTANT: Zip from repo root with relative paths so files land in wwwroot correctly.
+        Push-Location $srcRoot
+        try {
+          Compress-Archive -Path @('function_app.py', 'host.json', 'requirements.txt', 'src') -DestinationPath $zipPath -Force
+        } finally {
+          Pop-Location
+        }
 
         # Ensure Azure builds Python dependencies from requirements.txt
         az functionapp config appsettings set `
