@@ -33,7 +33,7 @@ steps:
         # IMPORTANT: Zip from repo root with relative paths so files land in wwwroot correctly.
         Push-Location $srcRoot
         try {
-          Compress-Archive -Path @('function_app.py', 'host.json', 'requirements.txt', 'src') -DestinationPath $zipPath -Force
+          Compress-Archive -Path @('function_app.py', 'host.json', 'requirements.txt', 'src', 'influx_to_sql_transfer') -DestinationPath $zipPath -Force
         } finally {
           Pop-Location
         }
@@ -44,8 +44,7 @@ steps:
           --name 'InfluxDBPy' `
           --settings `
             SCM_DO_BUILD_DURING_DEPLOYMENT=true `
-            FUNCTIONS_WORKER_RUNTIME=python `
-            WEBSITE_TIME_ZONE='Romance Standard Time'
+            FUNCTIONS_EXTENSION_VERSION=~4
 
         az functionapp deployment source config-zip `
           --resource-group 'InfluxDB' `
