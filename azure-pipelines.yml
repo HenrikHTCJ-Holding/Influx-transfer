@@ -42,7 +42,7 @@ steps:
         # Ensure Azure builds Python dependencies from requirements.txt
         az functionapp config appsettings set `
           --resource-group 'InfluxDB' `
-          --name 'InfluxDB' `
+          --name 'InfluxDBPy' `
           --settings `
             SCM_DO_BUILD_DURING_DEPLOYMENT=true `
             FUNCTIONS_WORKER_RUNTIME=python `
@@ -50,9 +50,9 @@ steps:
 
         az functionapp deployment source config-zip `
           --resource-group 'InfluxDB' `
-          --name 'InfluxDB' `
+          --name 'InfluxDBPy' `
           --src $zipPath
 
         az functionapp restart `
           --resource-group 'InfluxDB' `
-          --name 'InfluxDB'
+          --name 'InfluxDBPy'
