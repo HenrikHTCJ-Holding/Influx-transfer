@@ -54,7 +54,15 @@ steps:
         try {
           # Deploy classic Python functions only. Including `function_app.py` (v2 model) can confuse
           # discovery on some Flex Consumption hosts ("Reading functions metadata (Custom)").
-          Compress-Archive -Path @('host.json', 'requirements.txt', 'src', 'influx_to_sql_transfer', '.python_packages') -DestinationPath $zipPath -Force
+          # Use `tar` instead of `Compress-Archive` because `Compress-Archive` can omit hidden items
+          # (notably `.python_packages` on Windows agents).
+          tar.exe -a -c -f $zipPath host.json requirements.txt src influx_to_sql_transfer .python_packages
+          if ($LASTEXITCODE -ne 0) { throw "tar packaging failed with exit code $LASTEXITCODE" }
+
+          $functionJsonEntry = (tar.exe -tf $zipPath | Select-String -SimpleMatch "influx_to_sql_transfer/function.json")
+          if (-not $functionJsonEntry) {
+            throw "Packaging verification failed: influx_to_sql_transfer/function.json not found in $zipPath"
+          }
         } finally {
           Pop-Location
         }
