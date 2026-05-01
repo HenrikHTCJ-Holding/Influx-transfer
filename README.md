@@ -1,7 +1,8 @@
-# InfluxDB → SQL Server transfer (Azure Functions)
+# InfluxDB query → JSON (Azure Functions, Power Automate)
 
-This repo contains a Python job that extracts time-series data from **InfluxDB 2.x** and writes it to an **on-prem SQL Server** table.
-It now runs as an **Azure Function** HTTP trigger via `function_app.py`, suitable for Power Automate.
+This repo contains a Python **Azure Function** that queries **InfluxDB 2.x** and returns **JSON** (`rows`) for **Power Automate** to turn into a CSV and save to SharePoint.
+
+There is **no SQL Server write** in this path.
 
 ## Run locally
 
@@ -25,16 +26,15 @@ Set environment variables:
 - `INFLUX_FIELDS` (comma-separated; e.g. `Current[A],Voltage[V]`)
 - `INFLUX_RANGE_START` (default `-24h`)
 
-### SQL Server (on‑prem)
+Optional:
 
-- `SQLSERVER_HOST`
-- `SQLSERVER_DB`
-- `SQLSERVER_USER`
-- `SQLSERVER_PASSWORD` (secret)
-- `SQLSERVER_SCHEMA` (default `dbo`)
-- `SQLSERVER_TABLE`
+- `INFLUX_TAG_COLUMNS`
+- `INFLUX_AGG_EVERY` (default `1m`)
+- `INFLUX_AGG_FN` (default `mean`)
+- `INFLUX_CREATE_EMPTY` (default `true`)
+- `INFLUX_TIMEOUT_MS` (default `120000`)
 
-Run:
+Run the query script:
 
 ```bash
 python -m src.transfer.main
@@ -43,7 +43,7 @@ python -m src.transfer.main
 ## Run as Azure Function locally
 
 1. Copy `local.settings.json.example` to `local.settings.json`.
-2. Fill in all required `INFLUX_*` and `SQLSERVER_*` values.
+2. Fill in all required `INFLUX_*` values.
 3. Start the function host:
 
 ```bash
@@ -54,18 +54,18 @@ HTTP endpoint route is `influx-to-sql-transfer` and method is `POST`.
 With `auth_level=FUNCTION`, call it using the function key (Power Automate can send this as query param `code`).
 
 Successful HTTP response contains:
-- `rowsUpserted`: number of rows merged into SQL
+
+- `rowsUpserted`: same as `rowCount` (kept for backward compatibility with earlier flows)
 - `rowCount`: number of rows returned
 - `rows`: array of row objects (JSON-safe, `Time` in UTC ISO format)
 
 In Power Automate:
+
 1. Use **HTTP** action to call the endpoint.
 2. Use **Parse JSON** on `body('HTTP')?['rows']`.
 3. Use **Create CSV table** from the parsed array.
 4. Use **SharePoint - Create file** to save the CSV in your target folder.
 
-### SQL index (recommended)
+## Azure App settings (Function App)
 
-To enforce idempotency and prevent duplicates, add a **unique index** on:
-
-- `[Time]`, `[ARC]`, `[MachineName]`
+In Azure Portal → Function App → **Environment variables** → **Application settings**, set the same `INFLUX_*` variables as above. No SQL settings are required.

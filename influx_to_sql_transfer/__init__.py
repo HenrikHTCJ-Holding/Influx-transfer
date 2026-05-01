@@ -8,12 +8,12 @@ from src.transfer.main import transfer
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info("HTTP trigger received for Influx to SQL transfer.")
+    logging.info("HTTP trigger received for Influx query (JSON for Power Automate).")
     try:
         rows_upserted, rows = transfer()
         body = {
             "ok": True,
-            "message": "Transfer completed successfully.",
+            "message": "Influx query completed successfully.",
             "rowsUpserted": rows_upserted,
             "rowCount": len(rows),
             "rows": rows,
@@ -25,10 +25,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="application/json",
         )
     except Exception as exc:
-        logging.exception("Influx to SQL transfer failed.")
+        logging.exception("Influx query failed.")
         body = {
             "ok": False,
-            "message": "Transfer failed.",
+            "message": "Influx query failed.",
             "error": str(exc),
             "triggeredAtUtc": datetime.now(timezone.utc).isoformat(),
         }

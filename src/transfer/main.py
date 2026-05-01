@@ -5,7 +5,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import pyodbc
 from influxdb_client import InfluxDBClient
 
 
@@ -15,29 +14,6 @@ def _env(name: str, *, required: bool = True, default: str | None = None) -> str
         raise RuntimeError(f"Missing required environment variable: {name}")
     assert value is not None
     return value
-
-
-def _sql_conn() -> pyodbc.Connection:
-    driver = os.getenv("SQLSERVER_DRIVER", "ODBC Driver 18 for SQL Server")
-    host = _env("SQLSERVER_HOST")
-    port = os.getenv("SQLSERVER_PORT", "1433")
-    db = _env("SQLSERVER_DB")
-    user = _env("SQLSERVER_USER")
-    password = _env("SQLSERVER_PASSWORD")
-
-    encrypt = os.getenv("SQLSERVER_ENCRYPT", "yes")
-    trust_cert = os.getenv("SQLSERVER_TRUST_CERT", "no")
-    timeout = os.getenv("SQLSERVER_TIMEOUT_SECONDS", "120")
-
-    conn_str = (
-        f"DRIVER={{{driver}}};"
-        f"SERVER={host},{port};"
-        f"DATABASE={db};"
-        f"UID={user};PWD={password};"
-        f"Encrypt={encrypt};TrustServerCertificate={trust_cert};"
-        f"Connection Timeout={timeout};"
-    )
-    return pyodbc.connect(conn_str)
 
 
 def _influx_client() -> InfluxDBClient:
@@ -145,57 +121,6 @@ def _rename_and_clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _qualified_table() -> str:
-    schema = os.getenv("SQLSERVER_SCHEMA", "dbo")
-    table = _env("SQLSERVER_TABLE")
-    # Avoid SQL injection by restricting to simple identifiers.
-    for part in (schema, table):
-        if not part.replace("_", "").isalnum():
-            raise RuntimeError(f"Invalid SQL identifier: {part!r}")
-    return f"[{schema}].[{table}]"
-
-
-def _upsert_by_key(cur: pyodbc.Cursor, *, table_sql: str, df: pd.DataFrame) -> int:
-    if df.empty:
-        return 0
-
-    key_cols = ["Time", "ARC", "MachineName"]
-    missing = [c for c in key_cols if c not in df.columns]
-    if missing:
-        raise RuntimeError(f"Expected key columns to exist for upsert keying: {missing}")
-
-    # Drop rows with any null key part to avoid violating key assumptions.
-    df = df.dropna(subset=key_cols).copy()
-    if df.empty:
-        return 0
-
-    cols = list(df.columns)
-    insert_cols_sql = ", ".join(f"[{c}]" for c in cols)
-    source_select_sql = ", ".join([f"? AS [{c}]" for c in cols])
-
-    update_cols = [c for c in cols if c not in key_cols]
-    if not update_cols:
-        raise RuntimeError(f"Upsert requires at least one non-key column besides {key_cols}")
-
-    update_set_sql = ", ".join([f"tgt.[{c}] = src.[{c}]" for c in update_cols])
-
-    sql = f"""
-MERGE {table_sql} AS tgt
-USING (SELECT {source_select_sql}) AS src
-ON (tgt.[Time] = src.[Time] AND tgt.[ARC] = src.[ARC] AND tgt.[MachineName] = src.[MachineName])
-WHEN MATCHED THEN
-  UPDATE SET {update_set_sql}
-WHEN NOT MATCHED THEN
-  INSERT ({insert_cols_sql})
-  VALUES ({", ".join([f"src.[{c}]" for c in cols])});
-"""
-
-    rows = list(df.itertuples(index=False, name=None))
-    cur.fast_executemany = True
-    cur.executemany(sql, rows)
-    return len(rows)
-
-
 def _to_json_records(df: pd.DataFrame) -> list[dict[str, Any]]:
     result = df.copy()
     if "Time" in result.columns:
@@ -206,10 +131,11 @@ def _to_json_records(df: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def transfer() -> tuple[int, list[dict[str, Any]]]:
+    """Query Influx, clean rows, return (row_count, rows_as_json_dicts). No SQL write."""
     bucket = _env("INFLUX_BUCKET")
     start = os.getenv("INFLUX_RANGE_START", "-24h")
 
-    print(f"[{datetime.now(timezone.utc).isoformat()}] Starting transfer (start={start}, key=Time+ARC+MachineName)")
+    print(f"[{datetime.now(timezone.utc).isoformat()}] Starting Influx query (start={start})")
 
     query = _build_flux_query(bucket=bucket, start=start)
 
@@ -219,27 +145,17 @@ def transfer() -> tuple[int, list[dict[str, Any]]]:
 
     df = _rename_and_clean(df)
     if df.empty:
-        print("No rows returned from Influx for the selected range; nothing to insert.")
+        print("No rows returned from Influx for the selected range.")
         return 0, []
 
     records = _to_json_records(df)
-
-    table_sql = _qualified_table()
-    conn = _sql_conn()
-    try:
-        cur = conn.cursor()
-        affected = _upsert_by_key(cur, table_sql=table_sql, df=df)
-        conn.commit()
-        print(f"Upserted {affected} rows into {table_sql} (key=[Time, ARC, MachineName]).")
-    finally:
-        conn.close()
-
-    return affected, records
+    print(f"Returned {len(records)} row(s) from Influx.")
+    return len(records), records
 
 
 def main() -> int:
-    affected, _ = transfer()
-    return affected
+    row_count, _ = transfer()
+    return row_count
 
 
 if __name__ == "__main__":
@@ -247,5 +163,5 @@ if __name__ == "__main__":
         main()
         raise SystemExit(0)
     except Exception as e:
-        print(f"Transfer failed: {e}", file=sys.stderr)
+        print(f"Query failed: {e}", file=sys.stderr)
         raise
