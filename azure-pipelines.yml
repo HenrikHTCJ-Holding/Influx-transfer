@@ -33,7 +33,9 @@ steps:
         # IMPORTANT: Zip from repo root with relative paths so files land in wwwroot correctly.
         Push-Location $srcRoot
         try {
-          Compress-Archive -Path @('function_app.py', 'host.json', 'requirements.txt', 'src', 'influx_to_sql_transfer') -DestinationPath $zipPath -Force
+          # Deploy classic Python functions only. Including `function_app.py` (v2 model) can confuse
+          # discovery on some Flex Consumption hosts ("Reading functions metadata (Custom)").
+          Compress-Archive -Path @('host.json', 'requirements.txt', 'src', 'influx_to_sql_transfer') -DestinationPath $zipPath -Force
         } finally {
           Pop-Location
         }
