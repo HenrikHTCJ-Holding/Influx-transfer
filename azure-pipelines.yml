@@ -16,6 +16,18 @@ variables:
     value: '3.11'
 
 steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: $(pythonVersion)
+    displayName: 'Use Python $(pythonVersion)'
+
+  - script: |
+      python -m pip install --upgrade pip
+      if (Test-Path .python_packages) { Remove-Item .python_packages -Recurse -Force }
+      pip install -r requirements.txt -t .python_packages\lib\site-packages
+    displayName: 'Vendor Python dependencies for Linux Functions'
+    workingDirectory: '$(Build.SourcesDirectory)'
+
   - task: AzureCLI@2
     displayName: 'Deploy Azure Function (zip deploy)'
     inputs:
@@ -35,17 +47,21 @@ steps:
         try {
           # Deploy classic Python functions only. Including `function_app.py` (v2 model) can confuse
           # discovery on some Flex Consumption hosts ("Reading functions metadata (Custom)").
-          Compress-Archive -Path @('host.json', 'requirements.txt', 'src', 'influx_to_sql_transfer') -DestinationPath $zipPath -Force
+          Compress-Archive -Path @('host.json', 'requirements.txt', 'src', 'influx_to_sql_transfer', '.python_packages') -DestinationPath $zipPath -Force
         } finally {
           Pop-Location
         }
 
-        # Ensure Azure builds Python dependencies from requirements.txt
+        # Flex Consumption does not support SCM_DO_BUILD_DURING_DEPLOYMENT; remove if present.
+        az functionapp config appsettings delete `
+          --resource-group 'InfluxDB' `
+          --name 'InfluxDBPy' `
+          --setting-names SCM_DO_BUILD_DURING_DEPLOYMENT
+
         az functionapp config appsettings set `
           --resource-group 'InfluxDB' `
           --name 'InfluxDBPy' `
           --settings `
-            SCM_DO_BUILD_DURING_DEPLOYMENT=true `
             FUNCTIONS_EXTENSION_VERSION=~4
 
         az functionapp deployment source config-zip `
