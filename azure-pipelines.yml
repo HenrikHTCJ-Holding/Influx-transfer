@@ -31,6 +31,9 @@ steps:
         python -m pip install --upgrade pip
         if (Test-Path .python_packages) { Remove-Item .python_packages -Recurse -Force }
         pip install -r requirements.txt -t .python_packages\lib\site-packages
+        # `Compress-Archive` skips hidden files/folders; `.python_packages` is typically hidden on Windows agents.
+        Get-ChildItem -Force .python_packages -Recurse -ErrorAction SilentlyContinue |
+          ForEach-Object { $_.Attributes = $_.Attributes -band (-bnot [IO.FileAttributes]::Hidden) }
 
   - task: AzureCLI@2
     displayName: 'Deploy Azure Function (zip deploy)'
