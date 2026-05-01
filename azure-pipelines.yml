@@ -21,12 +21,16 @@ steps:
       versionSpec: $(pythonVersion)
     displayName: 'Use Python $(pythonVersion)'
 
-  - script: |
-      python -m pip install --upgrade pip
-      if (Test-Path .python_packages) { Remove-Item .python_packages -Recurse -Force }
-      pip install -r requirements.txt -t .python_packages\lib\site-packages
+  - task: PowerShell@2
     displayName: 'Vendor Python dependencies for Linux Functions'
-    workingDirectory: '$(Build.SourcesDirectory)'
+    inputs:
+      targetType: 'inline'
+      workingDirectory: '$(Build.SourcesDirectory)'
+      script: |
+        $ErrorActionPreference = 'Stop'
+        python -m pip install --upgrade pip
+        if (Test-Path .python_packages) { Remove-Item .python_packages -Recurse -Force }
+        pip install -r requirements.txt -t .python_packages\lib\site-packages
 
   - task: AzureCLI@2
     displayName: 'Deploy Azure Function (zip deploy)'
