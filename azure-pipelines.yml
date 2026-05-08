@@ -36,7 +36,7 @@ steps:
     displayName: 'Deploy Azure Function (zip deploy)'
     inputs:
       azureSubscription: 'FuncAPP_InfluxDB'
-      scriptType: 'ps'
+      scriptType: 'pscore'
       scriptLocation: 'inlineScript'
       inlineScript: |
         $ErrorActionPreference = 'Stop'
