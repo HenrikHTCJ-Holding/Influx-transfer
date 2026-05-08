@@ -9,6 +9,7 @@
     "INFLUX_BUCKET": "",
     "INFLUX_MEASUREMENT": "",
     "INFLUX_FIELDS": "",
+    "SQL_CONNECTION_STRING": "DRIVER={ODBC Driver 17 for SQL Server};SERVER=<server>,1433;DATABASE=<database>;UID=<user>;PWD=<password>;Connection Timeout=120;",
     "INFLUX_RANGE_START": "-24h",
     "INFLUX_TAG_COLUMNS": "ARC,Equipment\\\\Type,Machine\\\\Name,Project\\\\No,Section\\\\Type,Tower\\\\No",
     "INFLUX_AGG_EVERY": "1m",

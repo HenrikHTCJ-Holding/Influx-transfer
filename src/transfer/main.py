@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyodbc
 from influxdb_client import InfluxDBClient
 
 
@@ -121,6 +122,31 @@ def _rename_and_clean(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _sql_conn() -> pyodbc.Connection:
+    conn_str = _env("SQL_CONNECTION_STRING")
+    return pyodbc.connect(conn_str)
+
+
+def _sql_upsert(df: pd.DataFrame) -> int:
+    rows = list(df.itertuples(index=False, name=None))
+    insert_cols = ", ".join(f"[{c}]" for c in df.columns)
+    placeholders = ", ".join(["?"] * len(df.columns))
+    insert_sql = (
+        f"INSERT INTO dbo.WeldingMeasurements ({insert_cols}) VALUES ({placeholders})"
+    )
+    delete_sql = (
+        "DELETE FROM dbo.WeldingMeasurements "
+        "WHERE [Time] >= DATEADD(hour, -24, GETUTCDATE())"
+    )
+    with _sql_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(delete_sql)
+        cur.fast_executemany = True
+        cur.executemany(insert_sql, rows)
+        conn.commit()
+    return len(rows)
+
+
 def _to_json_records(df: pd.DataFrame) -> list[dict[str, Any]]:
     result = df.copy()
     if "Time" in result.columns:
@@ -131,7 +157,7 @@ def _to_json_records(df: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def transfer() -> tuple[int, list[dict[str, Any]]]:
-    """Query Influx, clean rows, return (row_count, rows_as_json_dicts). No SQL write."""
+    """Query Influx, upsert rows to SQL Server, return (rows_upserted, rows_as_json_dicts)."""
     bucket = _env("INFLUX_BUCKET")
     start = os.getenv("INFLUX_RANGE_START", "-24h")
 
@@ -148,9 +174,10 @@ def transfer() -> tuple[int, list[dict[str, Any]]]:
         print("No rows returned from Influx for the selected range.")
         return 0, []
 
+    rows_upserted = _sql_upsert(df)
     records = _to_json_records(df)
-    print(f"Returned {len(records)} row(s) from Influx.")
-    return len(records), records
+    print(f"Upserted {rows_upserted} row(s) to SQL Server.")
+    return rows_upserted, records
 
 
 def main() -> int:
