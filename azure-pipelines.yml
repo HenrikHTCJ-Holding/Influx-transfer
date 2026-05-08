@@ -9,7 +9,7 @@ pr: none
 # Uses a Microsoft-hosted agent.
 
 pool:
-  vmImage: 'windows-latest'
+  vmImage: 'ubuntu-latest'
 
 variables:
   - name: pythonVersion
@@ -21,19 +21,16 @@ steps:
       versionSpec: $(pythonVersion)
     displayName: 'Use Python $(pythonVersion)'
 
-  - task: PowerShell@2
+  - task: Bash@3
     displayName: 'Vendor Python dependencies for Linux Functions'
     inputs:
       targetType: 'inline'
       workingDirectory: '$(Build.SourcesDirectory)'
       script: |
-        $ErrorActionPreference = 'Stop'
+        set -euo pipefail
         python -m pip install --upgrade pip
-        if (Test-Path .python_packages) { Remove-Item .python_packages -Recurse -Force }
-        pip install -r requirements.txt -t .python_packages\lib\site-packages
-        # `Compress-Archive` skips hidden files/folders; `.python_packages` is typically hidden on Windows agents.
-        Get-ChildItem -Force .python_packages -Recurse -ErrorAction SilentlyContinue |
-          ForEach-Object { $_.Attributes = $_.Attributes -band (-bnot [IO.FileAttributes]::Hidden) }
+        rm -rf .python_packages
+        pip install -r requirements.txt -t .python_packages/lib/site-packages
 
   - task: AzureCLI@2
     displayName: 'Deploy Azure Function (zip deploy)'
@@ -45,7 +42,7 @@ steps:
         $ErrorActionPreference = 'Stop'
 
         $srcRoot = "$(Build.SourcesDirectory)"
-        $zipPath = "$(Build.ArtifactStagingDirectory)\deploy.zip"
+        $zipPath = "$(Build.ArtifactStagingDirectory)/deploy.zip"
 
         if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
@@ -54,12 +51,11 @@ steps:
         try {
           # Deploy classic Python functions only. Including `function_app.py` (v2 model) can confuse
           # discovery on some Flex Consumption hosts ("Reading functions metadata (Custom)").
-          # Use `tar` instead of `Compress-Archive` because `Compress-Archive` can omit hidden items
-          # (notably `.python_packages` on Windows agents).
-          tar.exe -a -c -f $zipPath host.json requirements.txt src influx_to_sql_transfer .python_packages
+          # Use `tar` to preserve all files including hidden items.
+          tar -a -c -f $zipPath host.json requirements.txt src influx_to_sql_transfer .python_packages
           if ($LASTEXITCODE -ne 0) { throw "tar packaging failed with exit code $LASTEXITCODE" }
 
-          $functionJsonEntry = (tar.exe -tf $zipPath | Select-String -SimpleMatch "influx_to_sql_transfer/function.json")
+          $functionJsonEntry = (tar -tf $zipPath | Select-String -SimpleMatch "influx_to_sql_transfer/function.json")
           if (-not $functionJsonEntry) {
             throw "Packaging verification failed: influx_to_sql_transfer/function.json not found in $zipPath"
           }
@@ -77,7 +73,14 @@ steps:
           --resource-group 'InfluxDB' `
           --name 'InfluxDBPy' `
           --settings `
-            FUNCTIONS_EXTENSION_VERSION=~4
+            FUNCTIONS_EXTENSION_VERSION=~4 `
+            SQL_CONNECTION_STRING="$(SQL_CONNECTION_STRING)" `
+            INFLUX_URL="$(INFLUX_URL)" `
+            INFLUX_TOKEN="$(INFLUX_TOKEN)" `
+            INFLUX_ORG="$(INFLUX_ORG)" `
+            INFLUX_BUCKET="$(INFLUX_BUCKET)" `
+            INFLUX_MEASUREMENT="$(INFLUX_MEASUREMENT)" `
+            INFLUX_FIELDS="$(INFLUX_FIELDS)"
 
         az functionapp deployment source config-zip `
           --resource-group 'InfluxDB' `
